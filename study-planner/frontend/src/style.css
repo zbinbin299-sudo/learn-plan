@@ -76,6 +76,16 @@ textarea:focus, .field-wrap input:focus, .field-wrap select:focus { border-color
 .field-wrap select { cursor: pointer; }
 .context-field { margin-top: 14px; }
 .context-field .field-label span { margin-left: 4px; color: #a6b0ab; font-size: 9px; font-weight: 500; }
+.context-selector { min-width: 0; margin: 15px 0 0; padding: 0; border: 0; }
+.context-selector legend { padding: 0; }
+.context-options { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.context-option { display: flex; align-items: flex-start; gap: 8px; min-width: 0; padding: 10px; background: #fbfcfb; border: 1px solid #e4ebe6; border-radius: 5px; cursor: pointer; transition: border .18s, background .18s; }
+.context-option.selected { background: #f1f7f3; border-color: #79a895; }
+.context-option input { flex: 0 0 auto; margin: 2px 0 0; accent-color: var(--green); }
+.context-option span { display: flex; min-width: 0; flex-direction: column; gap: 4px; }
+.context-option strong { color: #45564d; font-size: 10px; }
+.context-option small { color: #8a9890; font-size: 9px; line-height: 1.45; }
+.context-hint { margin: 7px 0 0; color: #839088; font-size: 9px; line-height: 1.5; }
 .form-footer { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 17px; }
 .privacy-note { display: flex; align-items: center; gap: 7px; color: #9aa69f; font-size: 9px; }
 .privacy-note svg { color: #72a98a; }

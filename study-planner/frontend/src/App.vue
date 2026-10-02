@@ -7,7 +7,9 @@ import {
 import { generatePlan, getCurrentPlan, updateTask } from './services/api'
 import type { PlanRequest, StudyPlan, StudyTask, TaskStatus } from './types'
 
-const learnerId = 'my-learning-space'
+const learnerStorageKey = 'study-planner:learner-id'
+const learnerId = ref(localStorage.getItem(learnerStorageKey) || 'my-learning-space')
+const contextMode = ref<'continue' | 'independent'>('continue')
 const today = new Date()
 const deadlineDefault = new Date(today.getTime() + 60 * 86400000).toISOString().slice(0, 10)
 const form = reactive({
@@ -40,9 +42,22 @@ function formatWeekday(value: string) {
 
 async function loadPlan() {
   try {
-    plan.value = await getCurrentPlan(learnerId)
+    plan.value = await getCurrentPlan(learnerId.value)
+    if (plan.value && contextMode.value === 'continue' && !form.goal.trim()) {
+      form.goal = plan.value.goal.clarified_goal
+    }
   } catch {
     error.value = '无法连接到后端。请先启动 FastAPI 服务。'
+  }
+}
+
+function setContextMode(mode: 'continue' | 'independent') {
+  contextMode.value = mode
+  if (mode === 'independent' && plan.value && form.goal === plan.value.goal.clarified_goal) {
+    form.goal = ''
+  }
+  if (mode === 'continue' && plan.value && !form.goal.trim()) {
+    form.goal = plan.value.goal.clarified_goal
   }
 }
 
@@ -53,9 +68,15 @@ async function submitPlan() {
   }
   loading.value = true
   error.value = ''
-  const payload: PlanRequest = { learner_id: learnerId, ...form }
+  const requestLearnerId = contextMode.value === 'independent' ? crypto.randomUUID() : learnerId.value
+  const payload: PlanRequest = { learner_id: requestLearnerId, ...form }
   try {
     plan.value = await generatePlan(payload)
+    if (contextMode.value === 'independent') {
+      learnerId.value = requestLearnerId
+      localStorage.setItem(learnerStorageKey, requestLearnerId)
+      contextMode.value = 'continue'
+    }
   } catch (cause) {
     error.value = cause instanceof Error ? cause.message : '计划生成失败。'
   } finally {
@@ -132,6 +153,20 @@ onMounted(loadPlan)
           </div>
           <label class="field-label" for="goal">我希望达成</label>
           <textarea id="goal" v-model="form.goal" rows="2" maxlength="500" placeholder="例如：三个月内掌握 Python 数据分析，并完成一个作品集项目"></textarea>
+          <fieldset class="context-selector">
+            <legend class="field-label">规划上下文</legend>
+            <div class="context-options">
+              <label class="context-option" :class="{ selected: contextMode === 'continue' }">
+                <input type="radio" name="context-mode" :checked="contextMode === 'continue'" @change="setContextMode('continue')" />
+                <span><strong>接续当前计划</strong><small>沿用当前学习空间的未完成任务</small></span>
+              </label>
+              <label class="context-option" :class="{ selected: contextMode === 'independent' }">
+                <input type="radio" name="context-mode" :checked="contextMode === 'independent'" @change="setContextMode('independent')" />
+                <span><strong>独立新建</strong><small>从空白开始，不读取历史任务</small></span>
+              </label>
+            </div>
+            <p class="context-hint">{{ contextMode === 'continue' ? '会把当前学习空间的未完成任务安排到新计划中。' : '会创建独立学习空间；之前的计划会保留，但不会带入本次规划。' }}</p>
+          </fieldset>
           <div class="form-grid">
             <label class="field-wrap"><span class="field-label">学习主题</span><input v-model="form.subject" placeholder="如：Python、英语、考研" /></label>
             <label class="field-wrap"><span class="field-label">当前水平</span><select v-model="form.current_level"><option>初学者</option><option>有一些基础</option><option>进阶提升</option><option>准备考试 / 项目</option></select></label>
@@ -168,13 +203,13 @@ onMounted(loadPlan)
               <span class="agent-status" :class="{ done: agent.status === '完成' }">{{ agent.status === '完成' ? '就绪' : '待命' }}</span>
             </div>
           </div>
-          <div class="memory-note"><RotateCcw :size="14" /><span>上下文记忆会保留未完成任务，自动带入下个周期。</span></div>
+          <div class="memory-note"><RotateCcw :size="14" /><span>接续模式会带入未完成任务；独立模式从空白开始。</span></div>
         </aside>
       </section>
 
       <div v-if="error" class="error-banner" role="alert">{{ error }}</div>
 
-      <template v-if="plan">
+      <template v-if="plan && contextMode === 'continue'">
         <section class="summary-strip" aria-label="计划摘要">
           <div class="summary-goal"><span class="summary-icon"><GraduationCap :size="18" /></span><div><small>当前目标</small><strong>{{ plan.goal.clarified_goal }}</strong></div></div>
           <div class="summary-stat"><span>计划周期</span><strong>{{ plan.goal.estimated_weeks }}<small>周</small></strong></div>
