@@ -3,7 +3,7 @@ from enum import Enum
 from typing import Optional
 from uuid import uuid4
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 
 class TaskStatus(str, Enum):
@@ -23,11 +23,18 @@ class PlanRequest(BaseModel):
     deadline: date = Field(default_factory=lambda: date.today() + timedelta(days=60))
     context_notes: str = Field(default="", max_length=2000)
 
+    @field_validator("deadline")
+    @classmethod
+    def deadline_must_not_be_in_the_past(cls, value: date) -> date:
+        if value < date.today():
+            raise ValueError("目标日期不能早于今天")
+        return value
+
 
 class GoalAnalysis(BaseModel):
     clarified_goal: str
     assumptions: list[str] = Field(default_factory=list)
-    milestones: list[str] = Field(default_factory=list)
+    milestones: list[str] = Field(min_length=1, max_length=5)
     estimated_weeks: int = Field(ge=1)
 
 

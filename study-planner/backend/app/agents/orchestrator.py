@@ -1,4 +1,3 @@
-import json
 import logging
 
 from ..models.schemas import AgentTrace, PlanRequest, StudyPlan
@@ -23,36 +22,32 @@ class StudyPlanningOrchestrator:
     async def create_plan(self, request: PlanRequest) -> StudyPlan:
         unfinished = self.memory.unfinished_tasks(request.learner_id)
         goal = await self.goal_agent.run(request)
-        logger.info("Agent 输出 | %s | %s", self.goal_agent.name, json.dumps(goal.model_dump(mode="json"), ensure_ascii=False))
+        logger.info(
+            "Agent 输出 | %s | milestones=%d estimated_weeks=%d",
+            self.goal_agent.name,
+            len(goal.milestones),
+            goal.estimated_weeks,
+        )
         resources, search_detail = await self.resource_agent.run(request)
         logger.info(
-            "Agent 输出 | %s | %s",
+            "Agent 输出 | %s | resources=%d",
             self.resource_agent.name,
-            json.dumps(
-                {
-                    "detail": search_detail,
-                    "resources": [resource.model_dump(mode="json") for resource in resources],
-                },
-                ensure_ascii=False,
-            ),
+            len(resources),
         )
         experience = await self.experience_agent.run(request, goal, resources, unfinished)
         logger.info(
-            "Agent 输出 | %s | %s",
+            "Agent 输出 | %s | risks=%d context_items=%d",
             self.experience_agent.name,
-            json.dumps(experience.model_dump(mode="json"), ensure_ascii=False),
+            len(experience.risks),
+            len(experience.context_used),
         )
         tasks, phases = await self.coordinator_agent.run(request, goal, unfinished)
         logger.info(
-            "Agent 输出 | %s | %s",
+            "Agent 输出 | %s | near_term_tasks=%d future_phases=%d migrated_tasks=%d",
             self.coordinator_agent.name,
-            json.dumps(
-                {
-                    "near_term_tasks": [task.model_dump(mode="json") for task in tasks],
-                    "future_phases": [phase.model_dump(mode="json") for phase in phases],
-                },
-                ensure_ascii=False,
-            ),
+            len(tasks),
+            len(phases),
+            len(unfinished),
         )
         plan = StudyPlan(
             learner_id=request.learner_id,

@@ -14,7 +14,7 @@ class PlanningCoordinatorAgent:
         unfinished: list[StudyTask],
     ) -> tuple[list[StudyTask], list[StudyPhase]]:
         today = date.today()
-        task_dates = self._study_dates(today, request.study_days_per_week)
+        task_dates = self._study_dates(today, request.study_days_per_week, request.deadline)
         near_tasks: list[StudyTask] = []
 
         for index, old_task in enumerate(unfinished):
@@ -37,7 +37,16 @@ class PlanningCoordinatorAgent:
                 "你是学习计划协调专家。为给定里程碑生成指定数量的近期学习任务，任务要小而具体，包含 title 和 description。只返回 JSON，格式为 {\"sessions\":[{\"title\":\"...\",\"description\":\"...\"}]}。",
                 {"milestones": goal.milestones, "count": new_sessions, "minutes_per_session": request.session_minutes},
             )
-            session_ideas = result.get("sessions", []) if result else []
+            raw_session_ideas = result.get("sessions", []) if isinstance(result, dict) else []
+            if isinstance(raw_session_ideas, list):
+                session_ideas = [
+                    {
+                        "title": idea.get("title", "") if isinstance(idea.get("title"), str) else "",
+                        "description": idea.get("description", "") if isinstance(idea.get("description"), str) else "",
+                    }
+                    for idea in raw_session_ideas
+                    if isinstance(idea, dict)
+                ]
         except Exception:
             session_ideas = []
         for index in range(new_sessions):
@@ -46,8 +55,8 @@ class PlanningCoordinatorAgent:
             idea = session_ideas[index] if index < len(session_ideas) else {}
             near_tasks.append(
                 StudyTask(
-                    title=idea.get("title") or f"第 {session_number} 次学习：{milestone}",
-                    description=idea.get("description") or self._task_detail(milestone, index),
+                    title=idea.get("title", "").strip() or f"第 {session_number} 次学习：{milestone}",
+                    description=idea.get("description", "").strip() or self._task_detail(milestone, index),
                     due_date=task_dates[min(len(unfinished) + index, len(task_dates) - 1)],
                     duration_minutes=request.session_minutes,
                     priority=2 if index < 2 else 3,
@@ -57,11 +66,13 @@ class PlanningCoordinatorAgent:
         return near_tasks, self._future_phases(today, request.deadline, goal)
 
     @staticmethod
-    def _study_dates(start: date, study_days_per_week: int) -> list[date]:
+    def _study_dates(start: date, study_days_per_week: int, deadline: date | None = None) -> list[date]:
+        weekdays = {index * 7 // study_days_per_week for index in range(study_days_per_week)}
+        last_day = min(start + timedelta(days=13), deadline) if deadline else start + timedelta(days=13)
         dates = [
             start + timedelta(days=offset)
-            for offset in range(14)
-            if (start + timedelta(days=offset)).weekday() < study_days_per_week
+            for offset in range((last_day - start).days + 1)
+            if (start + timedelta(days=offset)).weekday() in weekdays
         ]
         return dates or [start]
 
